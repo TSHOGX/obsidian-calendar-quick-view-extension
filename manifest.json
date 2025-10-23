@@ -1,0 +1,10 @@
+{
+    "id": "calendar-quick-view",
+    "name": "Calendar Quick View",
+    "version": "1.0.0",
+    "minAppVersion": "0.15.0",
+    "description": "A calendar view that displays diary content in calendar cells",
+    "author": "TSHOGX",
+    "authorUrl": "https://github.com/TSHOGX",
+    "isDesktopOnly": false
+}
