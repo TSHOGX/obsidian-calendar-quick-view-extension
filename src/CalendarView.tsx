@@ -1,5 +1,5 @@
 import * as React from "react";
-import { App, TFile, moment, MarkdownRenderer } from "obsidian";
+import { App, TFile, moment, MarkdownRenderer, Scope } from "obsidian";
 import type CalendarQuickViewPlugin from "../main";
 
 interface CalendarViewProps {
@@ -134,34 +134,54 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     React.useState<moment.Moment>(moment());
   const [showMonthPicker, setShowMonthPicker] = React.useState(false);
   const hasInitialScrolled = React.useRef(false);
+  const diaryModalRef = React.useRef(diaryModal);
+  const showMonthPickerRef = React.useRef(showMonthPicker);
+  React.useEffect(() => {
+    diaryModalRef.current = diaryModal;
+  }, [diaryModal]);
+  React.useEffect(() => {
+    showMonthPickerRef.current = showMonthPicker;
+  }, [showMonthPicker]);
+
+  // Obsidian keymap scope to swallow ESC when this view is active
+  React.useEffect(() => {
+    const scope = new Scope(app.scope);
+    scope.register([], "Escape", (evt) => {
+      const activeView = app.workspace.activeLeaf?.view;
+      if (!activeView || activeView.getViewType?.() !== "calendar-quick-view") {
+        return true;
+      }
+
+      // Close modal or picker if open; otherwise swallow ESC
+      if (diaryModalRef.current.isOpen) {
+        evt?.preventDefault();
+        closeModal();
+        return false;
+      }
+
+      if (showMonthPickerRef.current) {
+        evt?.preventDefault();
+        setShowMonthPicker(false);
+        return false;
+      }
+
+      // Swallow to avoid Obsidian's default tab navigation
+      evt?.preventDefault();
+      return false;
+    });
+
+    plugin.app.keymap.pushScope(scope);
+    return () => {
+      plugin.app.keymap.popScope(scope);
+    };
+  }, []);
 
   // Initialize with current month and surrounding months
   React.useEffect(() => {
     initializeCalendar();
   }, [settings]);
 
-  // Handle ESC key to close modals
-  React.useEffect(() => {
-    const handleEscKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        // Check if any modal is open and close it
-        if (diaryModal.isOpen) {
-          event.preventDefault();
-          event.stopPropagation();
-          closeModal();
-        } else if (showMonthPicker) {
-          event.preventDefault();
-          event.stopPropagation();
-          setShowMonthPicker(false);
-        }
-      }
-    };
-
-    document.addEventListener("keydown", handleEscKey, true); // Use capture phase
-    return () => {
-      document.removeEventListener("keydown", handleEscKey, true);
-    };
-  }, [diaryModal.isOpen, showMonthPicker]);
+  // (ESC is handled via the Obsidian keymap scope above)
 
   const initializeCalendar = async () => {
     const today = moment();
@@ -194,7 +214,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
         if (todayMonthIndex >= 0) {
           const monthElements = scrollContainerRef.current.querySelectorAll(
-            ".calendar-month-block"
+            ".cqv-month-block"
           );
           if (monthElements[todayMonthIndex]) {
             monthElements[todayMonthIndex].scrollIntoView({
@@ -261,7 +281,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     const clientHeight = container.clientHeight;
 
     // Update current visible month based on scroll position
-    const monthElements = container.querySelectorAll(".calendar-month-block");
+    const monthElements = container.querySelectorAll(".cqv-month-block");
     const containerTop = container.getBoundingClientRect().top;
 
     for (let i = 0; i < monthElements.length; i++) {
@@ -378,7 +398,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const getFullContent = async (file: TFile): Promise<string> => {
     try {
       const content = await app.vault.cachedRead(file);
-      return content || "Empty note";
+      return content || "";
     } catch (error) {
       console.error("Error reading file:", error);
       return "";
@@ -493,7 +513,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     }
 
     // Create the file
-    const file = await app.vault.create(filePath, `# ${dateStr}\n\n`);
+    const file = await app.vault.create(filePath, "");
     await app.workspace.getLeaf(false).openFile(file);
 
     // Refresh calendar
@@ -509,9 +529,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
     if (todayMonthIndex >= 0 && scrollContainerRef.current) {
       // Scroll to today's month
-      const monthElements = scrollContainerRef.current.querySelectorAll(
-        ".calendar-month-block"
-      );
+      const monthElements =
+        scrollContainerRef.current.querySelectorAll(".cqv-month-block");
       if (monthElements[todayMonthIndex]) {
         monthElements[todayMonthIndex].scrollIntoView({
           behavior: "smooth",
@@ -531,9 +550,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
     if (targetMonthIndex >= 0 && scrollContainerRef.current) {
       // Month is loaded, scroll to it
-      const monthElements = scrollContainerRef.current.querySelectorAll(
-        ".calendar-month-block"
-      );
+      const monthElements =
+        scrollContainerRef.current.querySelectorAll(".cqv-month-block");
       if (monthElements[targetMonthIndex]) {
         monthElements[targetMonthIndex].scrollIntoView({
           behavior: "smooth",
@@ -546,6 +564,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       loadMonthRange(targetMonth);
     }
     setShowMonthPicker(false);
+  };
+
+  const handleReload = async () => {
+    await initializeCalendar();
   };
 
   const loadMonthRange = async (centerMonth: moment.Moment) => {
@@ -577,7 +599,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
         if (targetMonthIndex >= 0) {
           const monthElements = scrollContainerRef.current.querySelectorAll(
-            ".calendar-month-block"
+            ".cqv-month-block"
           );
           if (monthElements[targetMonthIndex]) {
             monthElements[targetMonthIndex].scrollIntoView({
@@ -613,19 +635,29 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
   return (
     <div className="calendar-quick-view-container">
-      <div className="calendar-header-sticky">
-        <div className="calendar-title">
-          <h3
-            className="calendar-current-month-title"
-            onClick={() => setShowMonthPicker(!showMonthPicker)}
+        <div className="cqv-header-sticky">
+          <div className="cqv-title">
+            <h3
+              className="cqv-current-month-title"
+              onClick={() => setShowMonthPicker(!showMonthPicker)}
             style={{ cursor: "pointer" }}
             title="Click to select month"
           >
             {currentVisibleMonth.format("YYYY年MM月")}
           </h3>
-          <button className="calendar-today-button" onClick={goToToday}>
-            📍 Today
-          </button>
+          <div className="cqv-header-actions">
+            <button className="cqv-today-button" onClick={goToToday}>
+              📍 Today
+            </button>
+            <button
+              className="cqv-reload-button"
+              onClick={handleReload}
+              title="Reload calendar content"
+              aria-label="Reload calendar"
+            >
+              🔄
+            </button>
+          </div>
         </div>
       </div>
 
@@ -649,7 +681,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       )}
 
       <div
-        className="calendar-scroll-container"
+        className="cqv-scroll-container"
         ref={scrollContainerRef}
         onScroll={handleScroll}
       >
@@ -661,24 +693,24 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             <div
               key={monthData.month.format("YYYY-MM")}
               data-month={monthData.month.format("YYYY-MM")}
-              className={`calendar-month-block ${
-                isCurrentMonth ? "current-month-block" : ""
+              className={`cqv-month-block ${
+                isCurrentMonth ? "cqv-current-month-block" : ""
               }`}
             >
-              <div className="calendar-month-header">
+              <div className="cqv-month-header">
                 <h4>{monthData.month.format("MMMM YYYY")}</h4>
               </div>
 
-              <div className="calendar-grid">
-                <div className="calendar-weekdays">
+              <div className="cqv-grid">
+                <div className="cqv-weekdays">
                   {visibleWeekDays.map((day) => (
-                    <div key={day} className="calendar-weekday">
+                    <div key={day} className="cqv-weekday">
                       {day}
                     </div>
                   ))}
                 </div>
 
-                <div className="calendar-days">
+                <div className="cqv-days">
                   {visibleDays.map((day, index) => {
                     const dateKey = day.date.format("YYYY-MM-DD");
                     const uniqueKey = `${monthData.month.format(
@@ -690,21 +722,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     return (
                       <div
                         key={index}
-                        className={`calendar-day ${
-                          day.isCurrentMonth ? "current-month" : "other-month"
-                        } ${day.isToday ? "today" : ""} ${
-                          day.file ? "has-content" : ""
-                        } ${isWeekend ? "weekend" : ""}`}
+                        className={`cqv-day ${
+                          day.isCurrentMonth ? "cqv-current-month" : "cqv-other-month"
+                        } ${day.isToday ? "cqv-today" : ""} ${
+                          day.file ? "cqv-has-content" : ""
+                        } ${isWeekend ? "cqv-weekend" : ""}`}
                         onClick={(e) => handleDayClick(day, e)}
                         onMouseEnter={() => setHoveredDay(dateKey)}
                         onMouseLeave={() => setHoveredDay(null)}
                       >
-                        <div className="calendar-day-number">
+                        <div className="cqv-day-number">
                           {day.date.format("D")}
                         </div>
                         {day.content && (
                           <div
-                            className="calendar-day-content markdown-rendered"
+                            className="cqv-day-content markdown-rendered"
                             ref={(el) => {
                               if (el) {
                                 contentRefs.current.set(uniqueKey, el as any);
@@ -713,7 +745,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           />
                         )}
                         {!day.file && day.isCurrentMonth && (
-                          <div className="calendar-day-empty">
+                          <div className="cqv-day-empty">
                             Click to create
                           </div>
                         )}
@@ -727,7 +759,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         })}
 
         {isLoadingMore && (
-          <div className="calendar-loading">Loading more months...</div>
+          <div className="cqv-loading">Loading more months...</div>
         )}
       </div>
 

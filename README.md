@@ -59,8 +59,7 @@ Then copy the built files (`main.js`, `manifest.json`, `styles.css`) to your vau
 ## Usage / 使用方法
 
 1. **Open Calendar View / 打开日历视图**
-   - Click the calendar icon in the ribbon / 点击侧边栏的日历图标
-   - Or use Command Palette: "Open Calendar Quick View" / 或使用命令面板："Open Calendar Quick View"
+   - Use Command Palette: "Open Calendar Quick View" / 使用命令面板："Open Calendar Quick View"
 
 2. **View Diary Content / 查看日记内容**
    - Diary content is **rendered as Markdown** directly in calendar cells / 日记内容直接在日历格子中以 **Markdown 格式渲染**
@@ -194,4 +193,3 @@ MIT 许可证 - 详见 LICENSE 文件。
 - Configurable diary folder and date format / 可配置的日记文件夹和日期格式
 - Support for custom themes / 支持自定义主题
 - Responsive design for mobile and desktop / 响应式设计，支持移动端和桌面端
-

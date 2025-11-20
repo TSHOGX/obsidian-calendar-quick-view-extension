@@ -26,9 +26,11 @@ const DEFAULT_SETTINGS: CalendarQuickViewSettings = {
 };
 
 export const VIEW_TYPE_CALENDAR_QUICK_VIEW = "calendar-quick-view";
+const PLUGIN_ICON_ID = "calendar-clock";
 
 export default class CalendarQuickViewPlugin extends Plugin {
   settings: CalendarQuickViewSettings;
+  ribbonIconEl: HTMLElement | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -39,10 +41,14 @@ export default class CalendarQuickViewPlugin extends Plugin {
       (leaf) => new CalendarQuickViewLeaf(leaf, this)
     );
 
-    // Add ribbon icon to activate view
-    this.addRibbonIcon("calendar", "Open Calendar Quick View", () => {
-      this.activateView();
-    });
+    // Always add ribbon icon to activate view
+    this.ribbonIconEl = this.addRibbonIcon(
+      PLUGIN_ICON_ID,
+      "Open Calendar Quick View",
+      () => {
+        this.activateView();
+      }
+    );
 
     // Add command to open calendar view
     this.addCommand({
@@ -60,6 +66,10 @@ export default class CalendarQuickViewPlugin extends Plugin {
   onunload() {
     // Detach all calendar views
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_CALENDAR_QUICK_VIEW);
+    if (this.ribbonIconEl) {
+      this.ribbonIconEl.remove();
+      this.ribbonIconEl = null;
+    }
   }
 
   async loadSettings() {
@@ -122,7 +132,7 @@ class CalendarQuickViewLeaf extends ItemView {
   }
 
   getIcon(): string {
-    return "calendar";
+    return PLUGIN_ICON_ID;
   }
 
   async onOpen() {
